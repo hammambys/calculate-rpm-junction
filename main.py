@@ -15,6 +15,8 @@ WINDOW_US = 5000  # 5 ms windows
 ROI = (0, 240, 0, 240)  # x1, x2, y1, y2
 MIN_PEAK_DIST = 3  # windows apart
 HISTORY = 200  # number of windows to keep
+NUM_BLADES = 3  # <-- ESTIMATE: typically 3-5 blades for a fan
+
 
 ##############################################
 # EVENT DECODING HELPERS
@@ -45,12 +47,16 @@ def count_roi(x, y, roi):
 ##############################################
 
 
-def estimate_rpm(peak_times):
-    if len(peak_times) < 2:
+def estimate_rpm(peak_times_us, num_blades=1):
+    """peak_times_us: list of timestamps in microseconds"""
+    if len(peak_times_us) < 2:
         return 0.0
-    diffs = np.diff(peak_times)
-    period = np.mean(diffs)
-    freq = 1.0 / period
+    diffs_us = np.diff(peak_times_us)
+    period_us = (
+        np.mean(diffs_us) * num_blades
+    )  # Each peak is 1/num_blades of a rotation
+    period_s = period_us / 1e6
+    freq = 1.0 / period_s
     return freq * 60.0
 
 
@@ -96,10 +102,10 @@ def main():
         if len(counts) > 5:
             if counts[-2] == max(list(counts)[-5:]):  # simple 5-window local max
                 if idx - last_peak >= MIN_PEAK_DIST:
-                    peaks.append(time.time())
+                    peaks.append(ts[-1])  # Use last event timestamp in window
                     last_peak = idx
 
-        rpm = estimate_rpm(list(peaks))
+        rpm = estimate_rpm(list(peaks), num_blades=NUM_BLADES)
 
         print(f"Window {idx:04d} | Events={c:5d} | RPM={rpm:6.2f}", end="\r")
 
